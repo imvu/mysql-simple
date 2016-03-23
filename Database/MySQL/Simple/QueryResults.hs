@@ -353,11 +353,13 @@ convertError :: [Field]
              -- instance, if converting to a 3-tuple, the number to
              -- provide here would be 3.
              -> a
-convertError fs vs n = throw $ ConversionFailed
-    (show (length fs) ++ " values: " ++ show (zip (map fieldType fs)
-                                                  (map (fmap ellipsis) vs)))
-    (show n ++ " slots in target type")
-    "mismatch between number of columns to convert and number in target type"
+convertError fs vs n = throw ConversionFailed
+    { errSQLType = show (length fs) ++ " values: " ++ show (zip (map fieldType fs)
+                                                                (map (fmap ellipsis) vs))
+    , errHaskellType = show n ++ " slots in target type"
+    , errMessage = "mismatch between number of columns to convert and number in target type"
+    , errFieldName = Nothing
+    }
 
 ellipsis :: ByteString -> ByteString
 ellipsis bs

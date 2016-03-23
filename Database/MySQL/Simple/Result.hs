@@ -61,17 +61,19 @@ import System.Locale (defaultTimeLocale)
 -- value fails.
 data ResultError = Incompatible { errSQLType :: String
                                 , errHaskellType :: String
-                                , errFieldName :: String
-                                , errMessage :: String }
+                                , errMessage :: String
+                                , errFieldName :: Maybe String }
                  -- ^ The SQL and Haskell types are not compatible.
                  | UnexpectedNull { errSQLType :: String
                                   , errHaskellType :: String
-                                  , errMessage :: String }
+                                  , errMessage :: String
+                                  , errFieldName :: Maybe String }
                  -- ^ A SQL @NULL@ was encountered when the Haskell
                  -- type did not permit it.
                  | ConversionFailed { errSQLType :: String
                                     , errHaskellType :: String
-                                    , errMessage :: String }
+                                    , errMessage :: String
+                                    , errFieldName :: Maybe String }
                  -- ^ The SQL value could not be parsed, or could not
                  -- be represented as a valid Haskell value, or an
                  -- unexpected low-level error occurred (e.g. mismatch
@@ -218,16 +220,25 @@ doConvert :: (Typeable a) =>
 doConvert f types cvt (Just bs)
     | mkCompat (fieldType f) `compat` types = cvt bs
     | otherwise = incompatible f (typeOf (cvt undefined)) "types incompatible"
-doConvert f _ cvt _ = throw $ UnexpectedNull (show (fieldType f))
-                              (show (typeOf (cvt undefined))) ""
+doConvert f _ cvt _ = throw UnexpectedNull { errSQLType = show (fieldType f)
+                                           , errHaskellType = show (typeOf (cvt undefined))
+                                           , errMessage = ""
+                                           , errFieldName = Just (B8.unpack (fieldName f))
+                                           }
 
 incompatible :: Field -> TypeRep -> String -> a
-incompatible f r = throw . Incompatible (show (fieldType f))
-                                        (show r)
-                                        (B8.unpack (fieldName f))
+incompatible f r msg = throw Incompatible { errSQLType = show (fieldType f)
+                                          , errHaskellType = show r
+                                          , errMessage = msg
+                                          , errFieldName = Just (B8.unpack (fieldName f))
+                                          }
 
 conversionFailed :: Field -> String -> String -> a
-conversionFailed f s = throw . ConversionFailed (show (fieldType f)) s
+conversionFailed f s t = throw ConversionFailed { errSQLType = show (fieldType f)
+                                                , errHaskellType = s
+                                                , errMessage = t
+                                                , errFieldName = Just (B8.unpack (fieldName f))
+                                                }
 
 atto :: (Typeable a) => Compat -> Parser a -> Field -> Maybe ByteString -> a
 atto types p0 f = doConvert f types $ go undefined p0
